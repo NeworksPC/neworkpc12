@@ -14,14 +14,22 @@ import os
 
 # Токен вашего бота
 BOT_TOKEN = "8342883084:AAH_INTLiRgrW1fpAsTPcxYvI9fd6c8wowU"
-# ID администратора
+# ID администратора (основного)
 ADMIN_ID = 7165501889
 # Ссылка на приватную группу
 PRIVATE_GROUP_LINK = "https://t.me/+iL5qzjdLjjM4YTMy"
+# Ссылка на отзывы
+REVIEWS_LINK = "https://t.me/reviewsNeworkPC"
+# Ссылка на обзор функционала
+FUNCTIONALITY_REVIEW_LINK = "https://t.me/neworkpcf"
+# Ссылка для скачивания DLC
+DLC_DOWNLOAD_LINK = "https://your-download-link.com"  # Замените на реальную ссылку
 # Реферальная комиссия (15%)
 REFERRAL_PERCENT = 15
 # Username вашего бота (ВАЖНО: без @)
 BOT_USERNAME = "NeworkPCprivatekeybot"
+# Минимальная сумма для вывода
+MIN_WITHDRAWAL = 100
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +43,9 @@ dp = Dispatcher(storage=storage)
 ORDERS_FILE = "orders.json"
 KEYS_FILE = "keys.json"
 USERS_FILE = "users.json"
+ADMINS_FILE = "admins.json"
+BANNED_USERS_FILE = "banned_users.json"
+WITHDRAWALS_FILE = "withdrawals.json"
 
 # Подписки с разными сроками
 SUBSCRIPTION_PERIODS = {
@@ -52,14 +63,14 @@ DEVICES = {
             "🔥 Поддержка последней версии игры (0.37.0)\n\n"
             "📲 Данный продукт поддерживает Android устройства версий 8-16\n\n"
             "🗽 Без рут прав!\n\n"
-            "🔍 Функционал APK версии: посмотреть - \n\n"
+            "🔍 **Функционал APК версии:** [посмотреть обзор]({})\n\n"
             "✅ **Поддерживаются такие способы входа:**\n"
             "• Google аккаунт\n"
             "• VK\n"
             "• Facebook\n"
             "• Любой удобный способ!\n\n"
             "Выберите срок подписки ниже ⬇️"
-        )
+        ).format(FUNCTIONALITY_REVIEW_LINK)
     },
     "emulator": {
         "name": "NeworkPC Emulator - БЕЗ рут прав",
@@ -68,14 +79,36 @@ DEVICES = {
             "🔥 Поддержка последней версии игры (0.37.0)\n\n"
             "🖥️ Работает на ПК через эмулятор Android\n\n"
             "🗽 Без рут прав!\n\n"
-            "🔍 Функционал эмулятора: посмотреть - \n\n"
+            "🔍 **Функционал эмулятора:** [посмотреть обзор]({})\n\n"
             "✅ **Поддерживаются такие способы входа:**\n"
             "• Google аккаунт\n"
             "• VK\n"
             "• Facebook\n"
             "• Любой удобный способ!\n\n"
             "Выберите срок подписки ниже ⬇️"
-        )
+        ).format(FUNCTIONALITY_REVIEW_LINK)
+    },
+    "ios": {
+        "name": "NeworkPC IPA iOS - на все iOS устройства",
+        "description": (
+            "📱 NeworkPC IPA iOS - на все iOS устройства\n\n"
+            "🔥 Поддержка последней версии игры (0.37.0)\n\n"
+            "🍎 Данный продукт поддерживает все iOS устройства\n"
+            "   • iPhone 8 и новее\n"
+            "   • iPad (любые модели)\n\n"
+            "⚡ Установка через AltStore/Sideloadly\n"
+            "🔧 Работает на непрошитых устройствах\n\n"
+            "🔍 **Функционал iOS версии:** [посмотреть обзор]({})\n\n"
+            "✅ **Поддерживаются такие способы входа:**\n"
+            "• Game Center\n"
+            "• Apple ID\n"
+            "• Любой удобный способ!\n\n"
+            "📦 **В комплекте:**\n"
+            "• IPA файл приложения\n"
+            "• Инструкция по установки\n"
+            "• Поддержка и помощь в установке\n\n"
+            "Выберите срок подписки ниже ⬇️"
+        ).format(FUNCTIONALITY_REVIEW_LINK)
     }
 }
 
@@ -103,16 +136,41 @@ class PurchaseStates(StatesGroup):
 
 # Функции для работы с данными
 def load_data(filename):
-    if os.path.exists(filename):
-        with open(filename, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return {}
+    """Загрузка данных из JSON файла"""
+    try:
+        if os.path.exists(filename):
+            with open(filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return {}
+    except Exception as e:
+        print(f"Ошибка при загрузке файла {filename}: {e}")
+        return {}
 
 def save_data(filename, data):
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    """Сохранение данных в JSON файл"""
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"Ошибка при сохранении файла {filename}: {e}")
+        return False
+
+def init_files():
+    """Инициализация файлов данных при первом запуске"""
+    files_to_init = [
+        ORDERS_FILE, KEYS_FILE, USERS_FILE, 
+        ADMINS_FILE, BANNED_USERS_FILE,
+        WITHDRAWALS_FILE, "referral_transactions.json"
+    ]
+    
+    for file in files_to_init:
+        if not os.path.exists(file):
+            save_data(file, {})
+            print(f"✅ Создан файл: {file}")
 
 def get_user_data(user_id):
+    """Получение данных пользователя"""
     users = load_data(USERS_FILE)
     if str(user_id) not in users:
         users[str(user_id)] = {
@@ -131,12 +189,17 @@ def get_user_data(user_id):
             "total_spent": 0,
             "orders_count": 0,
             "is_banned": False,
-            "last_activity": datetime.now().isoformat()
+            "last_activity": datetime.now().isoformat(),
+            "withdrawals": [],
+            "total_withdrawn": 0,
+            "card_number": None,
+            "cardholder_name": None
         }
         save_data(USERS_FILE, users)
     return users[str(user_id)]
 
 def update_user_data(user_id, data):
+    """Обновление данных пользователя"""
     users = load_data(USERS_FILE)
     if str(user_id) not in users:
         get_user_data(user_id)
@@ -147,6 +210,7 @@ def update_user_data(user_id, data):
     save_data(USERS_FILE, users)
 
 def generate_order_id():
+    """Генерация ID заказа"""
     orders = load_data(ORDERS_FILE)
     if not orders:
         return "ORD-001"
@@ -164,10 +228,11 @@ def generate_order_id():
     new_id = max_id + 1
     return f"ORD-{new_id:03d}"
 
-def generate_key(order_id, period_days):
-    base_key = f"EU_NEWORKPC_{order_id.split('-')[1]}"
-    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    key = f"{base_key}_{random_part}"
+def generate_key(order_id, period_days, device_type="apk"):
+    """Генерация ключа"""
+    base_key = f"ZINA-{order_id.split('-')[1]}"
+    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    key = f"{base_key}{random_part}"
     
     if period_days == "навсегда":
         expires_at = None
@@ -180,17 +245,20 @@ def generate_key(order_id, period_days):
         "created_at": datetime.now().isoformat(),
         "expires_at": expires_at,
         "is_used": False,
-        "period_days": period_days
+        "period_days": period_days,
+        "device_type": device_type
     }
     save_data(KEYS_FILE, keys)
     
     return key
 
 def generate_referral_code(user_id):
+    """Генерация реферального кода"""
     code = f"REF{user_id % 10000:04d}{random.randint(100, 999)}"
     return code
 
 def get_referral_link(user_id):
+    """Получение реферальной ссылки"""
     user_data = get_user_data(user_id)
     referral_code = user_data["referral_code"]
     return f"https://t.me/{BOT_USERNAME}?start=ref_{referral_code}"
@@ -222,84 +290,9 @@ def process_referral_system(user_id, amount):
             users[str(referrer_id)] = referrer_data
             save_data(USERS_FILE, users)
             
-            # Записываем реферальную транзакцию
-            referrals_data = load_data("referral_transactions.json") if os.path.exists("referral_transactions.json") else {}
-            transaction_id = f"TRX-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            referrals_data[transaction_id] = {
-                "referrer_id": referrer_id,
-                "user_id": user_id,
-                "amount": amount,
-                "bonus": referral_bonus,
-                "percent": REFERRAL_PERCENT,
-                "timestamp": datetime.now().isoformat(),
-                "order_id": None
-            }
-            save_data("referral_transactions.json", referrals_data)
-            
             return referral_bonus
     
     return 0
-
-async def send_referral_notification(referrer_id, new_user_id, bonus, amount):
-    """Отправка уведомления о реферальном бонусе"""
-    users = load_data(USERS_FILE)
-    new_user_data = users.get(str(new_user_id), {})
-    new_user_name = new_user_data.get("first_name", "Пользователь")
-    
-    message = (
-        f"🎉 **Новый реферал совершил покупку!**\n\n"
-        f"👤 Пользователь: {new_user_name}\n"
-        f"💰 Сумма покупки: {amount} RUB\n"
-        f"🎁 Ваш бонус: {bonus} RUB ({REFERRAL_PERCENT}%)\n\n"
-        f"💳 Ваш баланс пополнен на {bonus} RUB!\n"
-        f"📊 Текущий баланс: {users[str(referrer_id)].get('balance', 0)} RUB\n\n"
-        f"🔗 Приглашайте больше друзей и зарабатывайте!"
-    )
-    
-    try:
-        await bot.send_message(referrer_id, message, parse_mode="Markdown")
-    except Exception as e:
-        print(f"Ошибка при отправке уведомления рефереру: {e}")
-
-# Вывод средств (ПЕРЕМЕЩЕНО ВПЕРЕД!)
-@dp.callback_query(lambda c: c.data == "withdraw_funds")
-async def withdraw_funds(callback_query: types.CallbackQuery):
-    user_id = callback_query.from_user.id
-    user_data = get_user_data(user_id)
-    balance = user_data.get("balance", 0)
-    
-    if balance < 100:
-        text = (
-            f"💰 **Вывод средств**\n\n"
-            f"❌ Минимальная сумма для вывода: 100 RUB\n"
-            f"💳 Ваш текущий баланс: {balance} RUB\n\n"
-            f"💡 **Чтобы вывести средства:**\n"
-            f"1. Пригласите друзей по реферальной ссылке\n"
-            f"2. Когда они купят подписку, вы получите {REFERRAL_PERCENT}%\n"
-            f"3. Когда баланс достигнет 100 RUB, свяжитесь с администратором\n\n"
-            f"🎁 Приглашайте больше друзей, чтобы накопить нужную сумму!"
-        )
-    else:
-        text = (
-            f"💰 **Вывод средств**\n\n"
-            f"✅ Доступно для вывода: {balance} RUB\n\n"
-            f"📞 **Для вывода средств:**\n"
-            f"1. Свяжитесь с администратором: @admin_username\n"
-            f"2. Укажите сумму вывода (мин. 100 RUB)\n"
-            f"3. Предоставьте реквизиты для перевода\n"
-            f"4. Сообщите ваш ID: `{user_id}`\n\n"
-            f"⚠️ **Внимание:** Вывод осуществляется вручную администратором в течение 24 часов."
-        )
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
-        [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")],
-        [InlineKeyboardButton(text="💬 Связаться с админом", url="https://t.me/admin_username")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
-    ])
-    
-    await callback_query.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
-    await callback_query.answer()
 
 # Команда /start с обработкой реферальных ссылок
 @dp.message(Command("start"))
@@ -336,19 +329,6 @@ async def cmd_start(message: types.Message):
             user_data["referrer_id"] = referrer_id
             update_user_data(user_id, user_data)
             
-            # Отправляем уведомление рефереру о новом реферале
-            try:
-                await bot.send_message(
-                    referrer_id,
-                    f"🎉 **У вас новый реферал!**\n\n"
-                    f"👤 Пользователь: {message.from_user.first_name}\n"
-                    f"📅 Дата: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n\n"
-                    f"💰 Теперь вы будете получать {REFERRAL_PERCENT}% с его покупок!",
-                    parse_mode="Markdown"
-                )
-            except:
-                pass
-            
             welcome_text = (
                 f"👋 Добро пожаловать, {message.from_user.first_name}!\n\n"
                 f"✅ Вы зашли по реферальной ссылке от {referrer_name}!\n\n"
@@ -369,10 +349,44 @@ async def cmd_start(message: types.Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🛒 Выбрать подписку", callback_data="choose_subscription")],
         [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
-        [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")]
+        [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")],
+        [InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)]
     ])
     
     await message.answer(welcome_text, reply_markup=keyboard)
+
+# Команда /admin для администратора
+@dp.message(Command("admin"))
+async def cmd_admin(message: types.Message):
+    user_id = message.from_user.id
+    
+    if user_id != ADMIN_ID:
+        await message.answer("❌ У вас нет прав доступа к этой команде!")
+        return
+    
+    admin_text = (
+        f"👑 **Панель администратора**\n\n"
+        f"📊 **Статистика:**\n"
+        f"• Пользователей: {len(load_data(USERS_FILE))}\n"
+        f"• Заказов: {len(load_data(ORDERS_FILE))}\n"
+        f"• Ключей: {len(load_data(KEYS_FILE))}\n\n"
+        f"⚙️ **Доступные команды:**\n"
+        f"/stats - Общая статистика\n"
+        f"/users - Список пользователей\n"
+        f"/orders - Список заказов\n"
+        f"/broadcast - Рассылка сообщений\n"
+        f"/ban - Заблокировать пользователя\n"
+        f"/unban - Разблокировать пользователя"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")],
+        [InlineKeyboardButton(text="📦 Заказы", callback_data="admin_orders")],
+        [InlineKeyboardButton(text="🔙 В главное меню", callback_data="main_menu")]
+    ])
+    
+    await message.answer(admin_text, parse_mode="Markdown", reply_markup=keyboard)
 
 # Личный профиль пользователя
 @dp.callback_query(lambda c: c.data == "my_profile")
@@ -426,6 +440,7 @@ async def my_profile(callback_query: types.CallbackQuery):
         f"💰 **Баланс:** {user_data.get('balance', 0)} RUB\n"
         f"💵 Всего заработано: {user_data.get('total_earned', 0)} RUB\n"
         f"💸 Всего потрачено: {user_data.get('total_spent', 0)} RUB\n"
+        f"💳 Всего выведено: {user_data.get('total_withdrawn', 0)} RUB\n"
         f"📦 Заказов: {user_data.get('orders_count', 0)}\n\n"
         f"🔑 **Активная подписка:**\n"
         f"{active_key_info}"
@@ -451,10 +466,17 @@ async def my_profile(callback_query: types.CallbackQuery):
     else:
         profile_text += "👥 Рефералов: 0 чел.\n"
     
+    # Добавляем информацию о карте если есть
+    if user_data.get("card_number"):
+        masked_card = user_data["card_number"][-4:].rjust(len(user_data["card_number"]), "*")
+        profile_text += f"\n💳 **Привязанная карта:** `{masked_card}`\n"
+    
     # Кнопки профиля
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 Обновить", callback_data="my_profile")],
         [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")],
+        [InlineKeyboardButton(text="💰 Вывести средства", callback_data="withdraw_funds")],
+        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
         [InlineKeyboardButton(text="🛒 Купить подписку", callback_data="choose_subscription")],
         [InlineKeyboardButton(text="🔙 Назад в меню", callback_data="main_menu")]
     ])
@@ -472,6 +494,7 @@ async def referral_system(callback_query: types.CallbackQuery):
     referrals_count = len(user_data.get("referrals", []))
     total_earned = user_data.get("total_earned", 0)
     balance = user_data.get("balance", 0)
+    total_withdrawn = user_data.get("total_withdrawn", 0)
     
     # Подсчитываем доход от рефералов за последние 30 дней
     last_month_income = 0
@@ -496,7 +519,8 @@ async def referral_system(callback_query: types.CallbackQuery):
         f"💵 Всего заработано: {total_earned} RUB\n"
         f"📈 За последний месяц: {last_month_income} RUB\n"
         f"💳 Текущий баланс: {balance} RUB\n"
-        f"🎯 Минимальный вывод: 100 RUB\n\n"
+        f"💸 Всего выведено: {total_withdrawn} RUB\n"
+        f"🎯 Минимальный вывод: {MIN_WITHDRAWAL} RUB\n\n"
         f"🔗 **Ваша реферальная ссылка:**\n"
         f"`{referral_link}`\n\n"
         f"📋 **Как это работает:**\n"
@@ -512,6 +536,7 @@ async def referral_system(callback_query: types.CallbackQuery):
                              url=f"https://t.me/share/url?url={referral_link}&text={share_text}")],
         [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
         [InlineKeyboardButton(text="💰 Вывести средства", callback_data="withdraw_funds")],
+        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
         [InlineKeyboardButton(text="📊 Мои рефералы", callback_data="my_referrals")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
     ])
@@ -554,6 +579,7 @@ async def my_referrals(callback_query: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")],
         [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
+        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
     ])
     
@@ -571,7 +597,8 @@ async def main_menu(callback_query: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🛒 Выбрать подписку", callback_data="choose_subscription")],
         [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
-        [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")]
+        [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")],
+        [InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)]
     ])
     
     await callback_query.message.edit_text(welcome_text, reply_markup=keyboard)
@@ -585,7 +612,10 @@ async def start_subscription_choice(callback_query: types.CallbackQuery, state: 
     
     device_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📱 Android устройство (APK)", callback_data="select_device_apk")],
-        [InlineKeyboardButton(text="💻 Эмулятор/ПК", callback_data="select_device_emulator")]
+        [InlineKeyboardButton(text="💻 Эмулятор/ПК", callback_data="select_device_emulator")],
+        [InlineKeyboardButton(text="🍎 iOS устройство (IPA)", callback_data="select_device_ios")],
+        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
     ])
     
     await callback_query.message.edit_text(device_text, parse_mode="Markdown", reply_markup=device_keyboard)
@@ -608,8 +638,17 @@ async def process_device_apk(callback_query: types.CallbackQuery, state: FSMCont
         for period_id, period_info in SUBSCRIPTION_PERIODS.items()
     ])
     
+    period_keyboard.inline_keyboard.append([
+        InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
+        InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
+    ])
+    period_keyboard.inline_keyboard.append([
+        InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+    ])
+    
     await callback_query.message.edit_text(
         DEVICES["apk"]["description"],
+        parse_mode="Markdown",
         reply_markup=period_keyboard
     )
     await callback_query.answer()
@@ -631,8 +670,49 @@ async def process_device_emulator(callback_query: types.CallbackQuery, state: FS
         for period_id, period_info in SUBSCRIPTION_PERIODS.items()
     ])
     
+    period_keyboard.inline_keyboard.append([
+        InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
+        InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
+    ])
+    period_keyboard.inline_keyboard.append([
+        InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+    ])
+    
     await callback_query.message.edit_text(
         DEVICES["emulator"]["description"],
+        parse_mode="Markdown",
+        reply_markup=period_keyboard
+    )
+    await callback_query.answer()
+
+# Выбор устройства (iOS)
+@dp.callback_query(lambda c: c.data == "select_device_ios")
+async def process_device_ios(callback_query: types.CallbackQuery, state: FSMContext):
+    await state.update_data(
+        device_type="ios",
+        device_name=DEVICES["ios"]["name"]
+    )
+    await state.set_state(PurchaseStates.waiting_for_period)
+    
+    period_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text=f"{period_info['name']} - {period_info['price']} RUB", 
+            callback_data=f"select_period_{period_id}"
+        )]
+        for period_id, period_info in SUBSCRIPTION_PERIODS.items()
+    ])
+    
+    period_keyboard.inline_keyboard.append([
+        InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
+        InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
+    ])
+    period_keyboard.inline_keyboard.append([
+        InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+    ])
+    
+    await callback_query.message.edit_text(
+        DEVICES["ios"]["description"],
+        parse_mode="Markdown",
         reply_markup=period_keyboard
     )
     await callback_query.answer()
@@ -671,7 +751,8 @@ async def process_period_choice(callback_query: types.CallbackQuery, state: FSMC
     payment_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Тинькофф", callback_data="select_payment_tinkoff")],
         [InlineKeyboardButton(text="🏦 СБП Сбербанк", callback_data="select_payment_sber_sbp")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="choose_subscription")]
+        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")]
     ])
     
     await callback_query.message.edit_text(summary_text, parse_mode="Markdown", reply_markup=payment_keyboard)
@@ -711,7 +792,7 @@ async def process_payment_method(callback_query: types.CallbackQuery, state: FSM
             f"1. Переведите {period_price} RUB на указанную карту\n"
             f"2. Сохраните чек об оплате (скриншот или фото)\n"
             f"3. Отправьте чек в этот чат\n\n"
-            f"✅ **После проверки чека мы отправим вам товар в течение 15 минут!**\n\n"
+            f"✅ **Товар выдается сразу после подтверждения платежа!**\n\n"
             f"⚠️ **ВНИМАНИЕ:** Обязательно отправьте чек для подтверждения оплаты!"
         )
     else:  # sber_sbp
@@ -732,11 +813,16 @@ async def process_payment_method(callback_query: types.CallbackQuery, state: FSM
             f"5. Подтвердите платеж\n"
             f"6. Сохраните чек об оплате (скриншот)\n"
             f"7. Отправьте чек в этот чат\n\n"
-            f"✅ **После проверки чека мы отправим вам товар в течение 15 минут!**\n\n"
+            f"✅ **Товар выдается сразу после подтверждения платежа!**\n\n"
             f"⚠️ **ВНИМАНИЕ:** Обязательно отправьте чек для подтверждения оплаты!"
         )
     
-    await callback_query.message.edit_text(payment_text, parse_mode="Markdown")
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")]
+    ])
+    
+    await callback_query.message.edit_text(payment_text, parse_mode="Markdown", reply_markup=keyboard)
     await callback_query.answer()
 
 # Обработка чека
@@ -802,6 +888,7 @@ async def process_order_for_user(message: types.Message, state: FSMContext):
         period_price = data.get("period_price")
         payment_method = data.get("payment_method")
         period_days = data.get("period_days")
+        device_type = data.get("device_type", "apk")
         
         order_id = generate_order_id()
         payment_details = PAYMENT_DETAILS.get(payment_method, {})
@@ -812,6 +899,7 @@ async def process_order_for_user(message: types.Message, state: FSMContext):
             "username": message.from_user.username,
             "full_name": f"{message.from_user.first_name} {message.from_user.last_name or ''}",
             "device_name": device_name,
+            "device_type": device_type,
             "period_name": period_name,
             "period_price": period_price,
             "period_days": period_days,
@@ -841,31 +929,24 @@ async def process_order_for_user(message: types.Message, state: FSMContext):
             f"💰 Сумма: {period_price} RUB\n"
             f"💳 Метод оплаты: {payment_name}\n\n"
             f"⏳ **Чек отправлен на проверку администратору...**\n\n"
-            f"✅ **Товар будет отправлен вам в течение 15 минут после подтверждения платежа!**"
+            f"✅ **Товар будет отправлен вам сразу после подтверждения платежа!**"
         )
         
         await message.answer(confirmation_text, parse_mode="Markdown")
-        await send_full_order_to_admin(order_id, order_info)
-        await state.clear()
         
-    except Exception as e:
-        print(f"Ошибка при обработке заказа: {e}")
-        await message.answer("❌ Произошла ошибка при обработке заказа. Попробуйте еще раз.")
-
-async def send_full_order_to_admin(order_id: str, order_info: dict):
-    try:
+        # Отправляем уведомление администратору
         admin_text = (
             f"🆔 **НОВЫЙ ЗАКАЗ: {order_id}**\n\n"
             f"👤 **Пользователь:**\n"
-            f"ID: {order_info['user_id']}\n"
-            f"Username: @{order_info['username'] or 'нет'}\n"
-            f"Имя: {order_info['full_name']}\n\n"
+            f"ID: {user_id}\n"
+            f"Username: @{message.from_user.username or 'нет'}\n"
+            f"Имя: {message.from_user.full_name}\n\n"
             f"📋 **Детали заказа:**\n"
-            f"📱 Устройство: {order_info['device_name']}\n"
-            f"⏳ Срок: {order_info['period_name']}\n"
-            f"💰 Сумма: {order_info['period_price']} RUB\n"
-            f"💳 Метод оплаты: {order_info['payment_method_name']}\n"
-            f"📅 Создан: {datetime.fromisoformat(order_info['timestamp']).strftime('%d.%m.%Y %H:%M:%S')}"
+            f"📱 Устройство: {device_name}\n"
+            f"⏳ Срок: {period_name}\n"
+            f"💰 Сумма: {period_price} RUB\n"
+            f"💳 Метод оплаты: {payment_name}\n"
+            f"📅 Создан: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
         )
         
         admin_keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -882,13 +963,19 @@ async def send_full_order_to_admin(order_id: str, order_info: dict):
             reply_markup=admin_keyboard
         )
         
+        await state.clear()
+        
     except Exception as e:
-        print(f"Ошибка при отправке заказа админу: {e}")
+        print(f"Ошибка при обработке заказа: {e}")
+        await message.answer("❌ Произошла ошибка при обработке заказа. Попробуйте еще раз.")
 
-# ИСПРАВЛЕННЫЙ ОБРАБОТЧИК ДЕЙСТВИЙ АДМИНИСТРАТОРА - ВСЁ В ОДНОМ СООБЩЕНИИ
+# Обработчик действий администратора
 @dp.callback_query(lambda c: c.data.startswith("approve_") or c.data.startswith("reject_"))
 async def process_admin_action(callback_query: types.CallbackQuery):
-    if callback_query.from_user.id != ADMIN_ID:
+    user_id = callback_query.from_user.id
+    
+    # Проверка прав администратора
+    if user_id != ADMIN_ID:
         await callback_query.answer("У вас нет прав для этого действия!")
         return
     
@@ -908,132 +995,73 @@ async def process_admin_action(callback_query: types.CallbackQuery):
         return
     
     order_info = orders[order_id]
-    user_id = order_info["user_id"]
+    order_user_id = order_info["user_id"]
     payment_name = order_info.get("payment_method_name", "Неизвестный метод")
     period_price = order_info.get("period_price", 0)
     
     if action == "approve":
         # Генерируем ключ
         period_days = order_info.get("period_days", 7)
+        device_type = order_info.get("device_type", "apk")
+        
         if period_days == "навсегда":
             period_days_for_key = 9999
         else:
             period_days_for_key = period_days
         
-        key = generate_key(order_id, period_days_for_key)
+        key = generate_key(order_id, period_days_for_key, device_type)
         
         # Обновляем заказ
         orders[order_id]["status"] = "approved"
         orders[order_id]["approved_at"] = datetime.now().isoformat()
         orders[order_id]["key"] = key
+        orders[order_id]["approved_by"] = user_id
         save_data(ORDERS_FILE, orders)
         
         # Обновляем данные пользователя
-        user_data = get_user_data(user_id)
+        user_data = get_user_data(order_user_id)
         user_data["active_key"] = key
         user_data["key_expires"] = None if period_days == "навсегда" else (
             datetime.now() + timedelta(days=period_days_for_key)
         ).isoformat()
-        update_user_data(user_id, user_data)
+        update_user_data(order_user_id, user_data)
         
         # Обрабатываем реферальную систему
-        referral_bonus = process_referral_system(user_id, period_price)
+        referral_bonus = process_referral_system(order_user_id, period_price)
         
-        # Формируем срок действия
-        if period_days == "навсегда":
-            validity_text = "✅ **Срок действия: НАВСЕГДА**"
+        # Определяем название товара в зависимости от типа устройства
+        device_name = order_info['device_name']
+        if "Android" in device_name or "APK" in device_name:
+            product_name = "St2 Internal APK"
+        elif "Emulator" in device_name or "ПК" in device_name:
+            product_name = "St2 Internal PC"
+        elif "iOS" in device_name:
+            product_name = "St2 Internal iOS"
         else:
-            validity_text = f"📅 **Срок действия: {period_days} дней**"
+            product_name = "St2 Internal"
         
-        # ФОРМИРУЕМ ЕДИНОЕ СООБЩЕНИЕ С ВСЕЙ ИНФОРМАЦИЕЙ
+        # Отправляем сообщение пользователю в новом формате
         user_message = (
-            f"✅ **✅ ОПЛАТА УСПЕШНО ПОЛУЧЕНА! ✅**\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📋 **ИНФОРМАЦИЯ О ЗАКАЗЕ:**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🆔 **Номер заказа:** {order_id}\n"
-            f"📱 **Устройство:** {order_info['device_name']}\n"
-            f"⏳ **Срок подписки:** {order_info['period_name']}\n"
-            f"💰 **Сумма:** {period_price} RUB\n"
-            f"💳 **Метод оплаты:** {payment_name}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔑 **ВАШ КЛЮЧ АКТИВАЦИИ:**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"```\n{key}\n```\n\n"
-            f"{validity_text}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📱 **ССЫЛКА НА ПРИВАТНУЮ ГРУППУ:**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{PRIVATE_GROUP_LINK}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📋 **ИНСТРУКЦИЯ ПО АКТИВАЦИИ:**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"1. 📲 Перейдите по ссылке выше\n"
-            f"2. 🔑 Вступите в приватную группу\n"
-            f"3. 📝 Отправьте ключ администратору группы\n"
-            f"4. 🎮 Получите доступ к NeworkPC!\n\n"
-            f"✅ **Поддерживаемые способы входа:**\n"
-            f"• Google аккаунт\n"
-            f"• VK\n"
-            f"• Facebook\n"
-            f"• Любой удобный способ!\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📞 **ТЕХНИЧЕСКАЯ ПОДДЕРЖКА:**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"Если возникли проблемы с активацией:\n"
-            f"1. Сохраните этот ключ!\n"
-            f"2. Обратитесь к администратору группы\n"
-            f"3. Сообщите номер заказа: {order_id}\n\n"
-            f"🎉 **Спасибо за покупку! Приятной игры!** 🎮\n\n"
-            f"💡 **Ключ также сохранен в вашем профиле!**\n"
-            f"Чтобы посмотреть ключ, перейдите в '👤 Мой профиль'"
+            f"💋 **Спасибо вам за покупку!**\n\n"
+            f"🔑 **Ваш Ключ:** `{key}`\n"
+            f"🛒 **Товар:** {product_name}\n"
+            f"⏳ **Срок товара:** {period_days} дней\n\n"
+            f"🎮 **Спасибо за доверие! Приятной игры!**"
         )
         
         # Кнопки для пользователя
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔗 Перейти в приватную группу", url=PRIVATE_GROUP_LINK)],
+            [InlineKeyboardButton(text="⬇️ СКАЧАТЬ DLC", url=DLC_DOWNLOAD_LINK)],
+            [InlineKeyboardButton(text="📋 Скопировать ключ", callback_data=f"copy_key_{key}")],
             [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
             [InlineKeyboardButton(text="🛒 Сделать новый заказ", callback_data="choose_subscription")]
         ])
         
         try:
-            # Отправляем одно сообщение со всей информацией
-            await bot.send_message(user_id, user_message, parse_mode="Markdown", reply_markup=keyboard)
+            await bot.send_message(order_user_id, user_message, parse_mode="Markdown", reply_markup=keyboard)
             
         except Exception as e:
             print(f"Ошибка при отправке сообщения пользователю: {e}")
-            # Если не удалось отправить длинное сообщение, пробуем разбить
-            try:
-                # Первая часть
-                await bot.send_message(
-                    user_id,
-                    f"✅ **✅ ОПЛАТА УСПЕШНО ПОЛУЧЕНА! ✅**\n\n"
-                    f"🆔 **Номер заказа:** {order_id}\n"
-                    f"📱 **Устройство:** {order_info['device_name']}\n"
-                    f"⏳ **Срок:** {order_info['period_name']}\n"
-                    f"💰 **Сумма:** {period_price} RUB\n\n"
-                    f"🔑 **ВАШ КЛЮЧ:**\n"
-                    f"```\n{key}\n```\n\n"
-                    f"{validity_text}",
-                    parse_mode="Markdown"
-                )
-                
-                # Вторая часть
-                await bot.send_message(
-                    user_id,
-                    f"🔗 **Приватная группа:**\n"
-                    f"{PRIVATE_GROUP_LINK}\n\n"
-                    f"✅ **Способы входа:** Google, VK, Facebook\n\n"
-                    f"📋 **Инструкция:**\n"
-                    f"1. Перейдите по ссылке\n"
-                    f"2. Отправьте ключ админу группы\n"
-                    f"3. Получите доступ!\n\n"
-                    f"🎮 **Приятной игры!**",
-                    parse_mode="Markdown",
-                    reply_markup=keyboard
-                )
-            except:
-                pass
         
         # Подтверждение администратору
         bonus_text = f"\n🎁 Реферальный бонус: {referral_bonus} RUB" if referral_bonus > 0 else ""
@@ -1063,6 +1091,7 @@ async def process_admin_action(callback_query: types.CallbackQuery):
     else:  # reject
         orders[order_id]["status"] = "rejected"
         orders[order_id]["rejected_at"] = datetime.now().isoformat()
+        orders[order_id]["rejected_by"] = user_id
         save_data(ORDERS_FILE, orders)
         
         user_message = (
@@ -1074,7 +1103,7 @@ async def process_admin_action(callback_query: types.CallbackQuery):
         )
         
         try:
-            await bot.send_message(user_id, user_message, parse_mode="Markdown")
+            await bot.send_message(order_user_id, user_message, parse_mode="Markdown")
         except:
             pass
         
@@ -1096,212 +1125,62 @@ async def process_admin_action(callback_query: types.CallbackQuery):
         
         await callback_query.answer(f"Заказ {order_id} отклонен!")
 
-# Команды администратора
-@dp.message(Command("admin"))
-async def admin_panel(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+# Обработчик копирования ключа
+@dp.callback_query(lambda c: c.data.startswith("copy_key_"))
+async def copy_key_handler(callback_query: types.CallbackQuery):
+    key = callback_query.data.replace("copy_key_", "")
     
-    admin_text = (
-        f"🛠️ **Панель администратора**\n\n"
-        f"📊 **Статистика:**\n"
-        f"👥 Пользователей: {len(load_data(USERS_FILE))}\n"
-        f"📦 Заказов: {len(load_data(ORDERS_FILE))}\n"
-        f"🔑 Ключей: {len(load_data(KEYS_FILE))}\n\n"
-        f"📋 **Доступные команды:**\n"
-        f"/orders - Все заказы\n"
-        f"/users - Все пользователи\n"
-        f"/stats - Статистика\n"
-        f"/check_key <ключ> - Проверить ключ\n"
-        f"/add_balance <id> <сумма> - Добавить баланс\n"
+    await callback_query.answer(f"Ключ скопирован: {key}")
+    
+    # Отправляем сообщение с ключом для копирования
+    await callback_query.message.answer(
+        f"🔑 **Ваш ключ для копирования:**\n"
+        f"```\n{key}\n```\n\n"
+        f"📋 Выделите и скопируйте ключ выше",
+        parse_mode="Markdown"
     )
-    
-    await message.answer(admin_text, parse_mode="Markdown")
 
-@dp.message(Command("users"))
-async def cmd_users(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
+# Вывод средств
+@dp.callback_query(lambda c: c.data == "withdraw_funds")
+async def withdraw_funds(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    user_data = get_user_data(user_id)
+    balance = user_data.get("balance", 0)
     
-    users = load_data(USERS_FILE)
-    
-    if not users:
-        await message.answer("👥 Пользователей нет")
-        return
-    
-    users_text = "👥 **Все пользователи:**\n\n"
-    
-    for user_id, user_data in list(users.items())[:20]:
-        users_text += (
-            f"🆔 ID: {user_id}\n"
-            f"👤 @{user_data.get('username', 'нет')}\n"
-            f"💰 Баланс: {user_data.get('balance', 0)} RUB\n"
-            f"👥 Рефералов: {len(user_data.get('referrals', []))}\n"
-            f"📅 Регистрация: {datetime.fromisoformat(user_data['join_date']).strftime('%d.%m.%Y')}\n\n"
-        )
-    
-    await message.answer(users_text[:4000], parse_mode="Markdown")
-
-@dp.message(Command("stats"))
-async def cmd_stats(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    users = load_data(USERS_FILE)
-    orders = load_data(ORDERS_FILE)
-    keys = load_data(KEYS_FILE)
-    
-    total_balance = sum(user.get("balance", 0) for user in users.values())
-    total_spent = sum(user.get("total_spent", 0) for user in users.values())
-    total_earned = sum(user.get("total_earned", 0) for user in users.values())
-    
-    approved_orders = sum(1 for order in orders.values() if order.get("status") == "approved")
-    pending_orders = sum(1 for order in orders.values() if order.get("status") == "pending")
-    
-    stats_text = (
-        f"📊 **Статистика системы**\n\n"
-        f"👥 **Пользователи:**\n"
-        f"Всего пользователей: {len(users)}\n"
-        f"Общий баланс: {total_balance} RUB\n"
-        f"Всего заработано: {total_earned} RUB\n"
-        f"Всего потрачено: {total_spent} RUB\n\n"
-        f"📦 **Заказы:**\n"
-        f"Всего заказов: {len(orders)}\n"
-        f"Подтверждено: {approved_orders}\n"
-        f"Ожидают: {pending_orders}\n\n"
-        f"🔑 **Ключи:**\n"
-        f"Всего ключей: {len(keys)}\n"
-        f"Активных: {sum(1 for key in keys.values() if not key.get('is_used', False))}"
-    )
-    
-    await message.answer(stats_text, parse_mode="Markdown")
-
-@dp.message(Command("check_key"))
-async def cmd_check_key(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer("❌ Использование: /check_key <ключ>")
-        return
-    
-    key = args[1]
-    keys = load_data(KEYS_FILE)
-    
-    if key in keys:
-        key_info = keys[key]
-        order_id = key_info["order_id"]
-        orders = load_data(ORDERS_FILE)
-        order_info = orders.get(order_id, {})
-        
-        status = "✅ АКТИВЕН" if not key_info["is_used"] else "❌ ИСПОЛЬЗОВАН"
-        
-        if key_info["expires_at"]:
-            expires_date = datetime.fromisoformat(key_info["expires_at"]).strftime('%d.%m.%Y %H:%M')
-            expires_text = f"📅 Истекает: {expires_date}"
-        else:
-            expires_text = "📅 Истекает: НИКОГДА (вечный ключ)"
-        
-        response = (
-            f"🔑 **Информация о ключе:**\n\n"
-            f"Ключ: `{key}`\n"
-            f"Статус: {status}\n"
-            f"Заказ: {order_id}\n"
-            f"Создан: {datetime.fromisoformat(key_info['created_at']).strftime('%d.%m.%Y %H:%M')}\n"
-            f"{expires_text}\n"
-            f"Срок: {key_info['period_days']} дней\n\n"
-            f"👤 **Информация о пользователе:**\n"
-            f"ID: {order_info.get('user_id', 'Неизвестно')}\n"
-            f"Username: @{order_info.get('username', 'нет')}\n"
-            f"Устройство: {order_info.get('device_name', 'Неизвестно')}"
+    if balance < MIN_WITHDRAWAL:
+        text = (
+            f"💰 **Вывод средств**\n\n"
+            f"❌ Минимальная сумма для вывода: {MIN_WITHDRAWAL} RUB\n"
+            f"💳 Ваш текущий баланс: {balance} RUB\n\n"
+            f"💡 **Чтобы вывести средства:**\n"
+            f"1. Пригласите друзей по реферальной ссылке\n"
+            f"2. Когда они купят подписку, вы получите {REFERRAL_PERCENT}%\n"
+            f"3. Когда баланс достигнет {MIN_WITHDRAWAL} RUB, свяжитесь с администратором\n\n"
+            f"🎁 Приглашайте больше друзей, чтобы накопить нужную сумму!"
         )
     else:
-        response = "❌ Ключ не найден!"
-    
-    await message.answer(response, parse_mode="Markdown")
-
-@dp.message(Command("add_balance"))
-async def cmd_add_balance(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    args = message.text.split()
-    if len(args) < 3:
-        await message.answer("❌ Использование: /add_balance <id> <сумма>")
-        return
-    
-    try:
-        user_id = int(args[1])
-        amount = int(args[2])
-        
-        users = load_data(USERS_FILE)
-        if str(user_id) not in users:
-            await message.answer(f"❌ Пользователь с ID {user_id} не найден!")
-            return
-        
-        users[str(user_id)]["balance"] = users[str(user_id)].get("balance", 0) + amount
-        save_data(USERS_FILE, users)
-        
-        await message.answer(f"✅ Баланс пользователя {user_id} пополнен на {amount} RUB")
-        
-        try:
-            await bot.send_message(
-                user_id,
-                f"💰 **Ваш баланс пополнен!**\n\n"
-                f"💳 На ваш счет зачислено: {amount} RUB\n"
-                f"📊 Текущий баланс: {users[str(user_id)]['balance']} RUB\n\n"
-                f"🎁 Вы можете вывести средства через раздел реферальной системы!",
-                parse_mode="Markdown"
-            )
-        except:
-            pass
-            
-    except ValueError:
-        await message.answer("❌ Неверный формат ID или суммы!")
-
-@dp.message(Command("orders"))
-async def cmd_orders(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    orders = load_data(ORDERS_FILE)
-    
-    if not orders:
-        await message.answer("📭 Заказов нет")
-        return
-    
-    orders_text = "📋 **Все заказы:**\n\n"
-    
-    for order_id, order_info in list(orders.items())[:15]:
-        status_emoji = "⏳" if order_info["status"] == "pending" else "✅" if order_info["status"] == "approved" else "❌"
-        key_info = f"🔑 {order_info.get('key', 'Нет ключа')}" if order_info.get('key') else "🔑 Нет ключа"
-        
-        orders_text += (
-            f"{status_emoji} **{order_id}**\n"
-            f"👤 @{order_info['username'] or 'нет'}\n"
-            f"📱 {order_info['device_name']}\n"
-            f"💰 {order_info['period_price']} RUB\n"
-            f"💳 {order_info.get('payment_method_name', 'Неизвестно')}\n"
-            f"{key_info}\n"
-            f"📅 {datetime.fromisoformat(order_info['timestamp']).strftime('%d.%m.%Y %H:%M')}\n"
-            f"🔸 Статус: {order_info['status']}\n\n"
+        text = (
+            f"💰 **Вывод средств**\n\n"
+            f"✅ Доступно для вывода: {balance} RUB\n"
+            f"🎯 Минимальная сумма: {MIN_WITHDRAWAL} RUB\n\n"
+            f"📞 **Для вывода средств:**\n"
+            f"1. Свяжитесь с администратором: @admin_username\n"
+            f"2. Укажите сумму вывода (мин. {MIN_WITHDRAWAL} RUB)\n"
+            f"3. Предоставьте реквизиты для перевода\n"
+            f"4. Сообщите ваш ID: `{user_id}`\n\n"
+            f"⚠️ **Внимание:** Вывод осуществляется вручную администратором в течение 24 часов."
         )
     
-    await message.answer(orders_text[:4000], parse_mode="Markdown")
-
-# ВАЖНО: Добавьте эту функцию для создания файла транзакций при первом запуске
-def init_files():
-    """Инициализация файлов данных при первом запуске"""
-    files_to_init = [
-        ORDERS_FILE, KEYS_FILE, USERS_FILE, 
-        "referral_transactions.json"
-    ]
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
+        [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")],
+        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
+        [InlineKeyboardButton(text="💬 Связаться с админом", url="https://t.me/admin_username")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
+    ])
     
-    for file in files_to_init:
-        if not os.path.exists(file):
-            save_data(file, {})
-            print(f"Создан файл: {file}")
+    await callback_query.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
+    await callback_query.answer()
 
 # Основная функция
 async def main():
@@ -1313,7 +1192,10 @@ async def main():
     print("=" * 60)
     print(f"👑 Администратор: {ADMIN_ID}")
     print(f"🔗 Приватная группа: {PRIVATE_GROUP_LINK}")
+    print(f"📝 Отзывы: {REVIEWS_LINK}")
+    print(f"🔍 Обзор функционала: {FUNCTIONALITY_REVIEW_LINK}")
     print(f"💰 Реферальная комиссия: {REFERRAL_PERCENT}%")
+    print(f"💸 Минимальный вывод: {MIN_WITHDRAWAL} RUB")
     print(f"🤝 Реферальные ссылки: https://t.me/{BOT_USERNAME}?start=ref_КОД")
     print("=" * 60)
     print("✅ Функции бота:")
@@ -1321,9 +1203,14 @@ async def main():
     print("   • Реферальная система 15%")
     print("   • История заказов")
     print("   • Автоматическое начисление бонусов")
-    print("   • Вывод средств от 100 RUB")
+    print("   • Отзывы пользователей")
     print("=" * 60)
-    print("📱 Поддерживаемые способы входа: Google, VK, Facebook")
+    print("📱 Поддерживаемые устройства:")
+    print("   • Android (APK)")
+    print("   • Эмулятор/ПК")
+    print("   • iOS (IPA)")
+    print("=" * 60)
+    print("✅ Поддерживаемые способы входа: Google, VK, Facebook, Game Center")
     print("=" * 60)
     print("🚀 Бот запущен и готов к работе!")
     print("Для остановки нажмите Ctrl+C")
