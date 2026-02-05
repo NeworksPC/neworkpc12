@@ -23,7 +23,9 @@ REVIEWS_LINK = "https://t.me/reviewsNeworkPC"
 # Ссылка на обзор функционала
 FUNCTIONALITY_REVIEW_LINK = "https://t.me/neworkpcf"
 # Ссылка для скачивания DLC
-DLC_DOWNLOAD_LINK = "https://your-download-link.com"  # Замените на реальную ссылку
+DLC_DOWNLOAD_LINK = "https://t.me/+UNdIZOL8P0U3Yzcy"  # ОБНОВЛЕНА
+# Общий ключ для всех
+COMMON_KEY = "ZINA-0518MNON3PK"  # ОБЩИЙ КЛЮЧ ДЛЯ ВСЕХ
 # Реферальная комиссия (15%)
 REFERRAL_PERCENT = 15
 # Username вашего бота (ВАЖНО: без @)
@@ -134,6 +136,12 @@ class PurchaseStates(StatesGroup):
     waiting_for_payment_method = State()
     waiting_for_receipt = State()
 
+# Состояния для админки
+class AdminStates(StatesGroup):
+    waiting_broadcast_message = State()
+    waiting_user_id_for_ban = State()
+    waiting_user_id_for_unban = State()
+
 # Функции для работы с данными
 def load_data(filename):
     """Загрузка данных из JSON файла"""
@@ -172,8 +180,10 @@ def init_files():
 def get_user_data(user_id):
     """Получение данных пользователя"""
     users = load_data(USERS_FILE)
-    if str(user_id) not in users:
-        users[str(user_id)] = {
+    user_id_str = str(user_id)
+    
+    if user_id_str not in users:
+        users[user_id_str] = {
             "id": user_id,
             "username": None,
             "first_name": "",
@@ -196,17 +206,19 @@ def get_user_data(user_id):
             "cardholder_name": None
         }
         save_data(USERS_FILE, users)
-    return users[str(user_id)]
+    return users[user_id_str]
 
 def update_user_data(user_id, data):
     """Обновление данных пользователя"""
     users = load_data(USERS_FILE)
-    if str(user_id) not in users:
+    user_id_str = str(user_id)
+    
+    if user_id_str not in users:
         get_user_data(user_id)
         users = load_data(USERS_FILE)
     
-    users[str(user_id)].update(data)
-    users[str(user_id)]["last_activity"] = datetime.now().isoformat()
+    users[user_id_str].update(data)
+    users[user_id_str]["last_activity"] = datetime.now().isoformat()
     save_data(USERS_FILE, users)
 
 def generate_order_id():
@@ -229,16 +241,16 @@ def generate_order_id():
     return f"ORD-{new_id:03d}"
 
 def generate_key(order_id, period_days, device_type="apk"):
-    """Генерация ключа"""
-    base_key = f"ZINA-{order_id.split('-')[1]}"
-    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-    key = f"{base_key}{random_part}"
+    """Генерация ключа (теперь возвращает общий ключ для всех)"""
+    # Возвращаем общий ключ для всех пользователей
+    key = COMMON_KEY
     
     if period_days == "навсегда":
         expires_at = None
     else:
         expires_at = (datetime.now() + timedelta(days=period_days)).isoformat()
     
+    # Сохраняем информацию о ключе
     keys = load_data(KEYS_FILE)
     keys[key] = {
         "order_id": order_id,
@@ -246,7 +258,8 @@ def generate_key(order_id, period_days, device_type="apk"):
         "expires_at": expires_at,
         "is_used": False,
         "period_days": period_days,
-        "device_type": device_type
+        "device_type": device_type,
+        "is_common": True  # Отметка, что это общий ключ
     }
     save_data(KEYS_FILE, keys)
     
@@ -266,37 +279,105 @@ def get_referral_link(user_id):
 def process_referral_system(user_id, amount):
     """Обработка реферальной системы при покупке"""
     users = load_data(USERS_FILE)
-    user_data = users.get(str(user_id), {})
+    user_id_str = str(user_id)
     
-    if "referrer_id" in user_data and user_data["referrer_id"]:
-        referrer_id = user_data["referrer_id"]
-        referrer_data = users.get(str(referrer_id), {})
+    if user_id_str in users:
+        user_data = users[user_id_str]
         
-        if referrer_data and not referrer_data.get("is_banned", False):
-            # Расчет реферального бонуса (15% от суммы)
-            referral_bonus = int(amount * REFERRAL_PERCENT / 100)
+        if "referrer_id" in user_data and user_data["referrer_id"]:
+            referrer_id = user_data["referrer_id"]
+            referrer_id_str = str(referrer_id)
             
-            # Обновляем данные реферера
-            referrer_data["balance"] = referrer_data.get("balance", 0) + referral_bonus
-            referrer_data["total_earned"] = referrer_data.get("total_earned", 0) + referral_bonus
-            
-            # Добавляем реферала в список если его там еще нет
-            if "referrals" not in referrer_data:
-                referrer_data["referrals"] = []
-            
-            if user_id not in referrer_data["referrals"]:
-                referrer_data["referrals"].append(user_id)
-            
-            users[str(referrer_id)] = referrer_data
-            save_data(USERS_FILE, users)
-            
-            return referral_bonus
+            if referrer_id_str in users:
+                referrer_data = users[referrer_id_str]
+                
+                if not referrer_data.get("is_banned", False):
+                    # Расчет реферального бонуса (15% от суммы)
+                    referral_bonus = int(amount * REFERRAL_PERCENT / 100)
+                    
+                    # Обновляем данные реферера
+                    referrer_data["balance"] = referrer_data.get("balance", 0) + referral_bonus
+                    referrer_data["total_earned"] = referrer_data.get("total_earned", 0) + referral_bonus
+                    
+                    # Добавляем реферала в список если его там еще нет
+                    if "referrals" not in referrer_data:
+                        referrer_data["referrals"] = []
+                    
+                    if user_id not in referrer_data["referrals"]:
+                        referrer_data["referrals"].append(user_id)
+                    
+                    users[referrer_id_str] = referrer_data
+                    save_data(USERS_FILE, users)
+                    
+                    # Сохраняем транзакцию
+                    transactions = load_data("referral_transactions.json")
+                    transaction_id = f"TRX-{datetime.now().strftime('%Y%m%d%H%M%S')}_{random.randint(1000, 9999)}"
+                    transactions[transaction_id] = {
+                        "referrer_id": referrer_id,
+                        "user_id": user_id,
+                        "amount": amount,
+                        "bonus": referral_bonus,
+                        "timestamp": datetime.now().isoformat(),
+                        "order_id": None
+                    }
+                    save_data("referral_transactions.json", transactions)
+                    
+                    return referral_bonus
     
     return 0
+
+def is_user_banned(user_id):
+    """Проверка, забанен ли пользователь"""
+    banned_users = load_data(BANNED_USERS_FILE)
+    return str(user_id) in banned_users
+
+def ban_user(user_id, reason="Нарушение правил", admin_id=ADMIN_ID):
+    """Блокировка пользователя"""
+    banned_users = load_data(BANNED_USERS_FILE)
+    user_id_str = str(user_id)
+    
+    banned_users[user_id_str] = {
+        "user_id": user_id,
+        "banned_at": datetime.now().isoformat(),
+        "banned_by": admin_id,
+        "reason": reason
+    }
+    
+    # Обновляем статус в данных пользователя
+    users = load_data(USERS_FILE)
+    if user_id_str in users:
+        users[user_id_str]["is_banned"] = True
+        save_data(USERS_FILE, users)
+    
+    save_data(BANNED_USERS_FILE, banned_users)
+    return True
+
+def unban_user(user_id):
+    """Разблокировка пользователя"""
+    banned_users = load_data(BANNED_USERS_FILE)
+    user_id_str = str(user_id)
+    
+    if user_id_str in banned_users:
+        del banned_users[user_id_str]
+        save_data(BANNED_USERS_FILE, banned_users)
+        
+        # Обновляем статус в данных пользователя
+        users = load_data(USERS_FILE)
+        if user_id_str in users:
+            users[user_id_str]["is_banned"] = False
+            save_data(USERS_FILE, users)
+        
+        return True
+    return False
 
 # Команда /start с обработкой реферальных ссылок
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+    # Проверяем, не забанен ли пользователь
+    if is_user_banned(message.from_user.id):
+        await message.answer("❌ Вы заблокированы в этом боте. Для разблокировки свяжитесь с администратором.")
+        return
+    
     args = message.text.split()
     user_id = message.from_user.id
     
@@ -369,34 +450,380 @@ async def cmd_admin(message: types.Message):
         f"📊 **Статистика:**\n"
         f"• Пользователей: {len(load_data(USERS_FILE))}\n"
         f"• Заказов: {len(load_data(ORDERS_FILE))}\n"
-        f"• Ключей: {len(load_data(KEYS_FILE))}\n\n"
+        f"• Ключей: {len(load_data(KEYS_FILE))}\n"
+        f"• Заблокированных: {len(load_data(BANNED_USERS_FILE))}\n\n"
         f"⚙️ **Доступные команды:**\n"
         f"/stats - Общая статистика\n"
         f"/users - Список пользователей\n"
         f"/orders - Список заказов\n"
         f"/broadcast - Рассылка сообщений\n"
         f"/ban - Заблокировать пользователя\n"
-        f"/unban - Разблокировать пользователя"
+        f"/unban - Разблокировать пользователя\n"
+        f"/addkey - Выдать ключ пользователю"
     )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats")],
         [InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")],
         [InlineKeyboardButton(text="📦 Заказы", callback_data="admin_orders")],
+        [InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_broadcast")],
+        [InlineKeyboardButton(text="🚫 Блокировка", callback_data="admin_ban")],
+        [InlineKeyboardButton(text="✅ Разблокировка", callback_data="admin_unban")],
         [InlineKeyboardButton(text="🔙 В главное меню", callback_data="main_menu")]
     ])
     
     await message.answer(admin_text, parse_mode="Markdown", reply_markup=keyboard)
 
-# Личный профиль пользователя
+# Рассылка сообщений - начало
+@dp.callback_query(lambda c: c.data == "admin_broadcast")
+async def admin_broadcast_start(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.from_user.id != ADMIN_ID:
+        await callback_query.answer("❌ У вас нет прав доступа!")
+        return
+    
+    await state.set_state(AdminStates.waiting_broadcast_message)
+    
+    text = (
+        "📢 **Рассылка сообщений**\n\n"
+        "Отправьте сообщение для рассылки всем пользователям бота.\n\n"
+        "Вы можете отправить:\n"
+        "• Текст\n"
+        "• Текст с фотографией\n"
+        "• Документ\n\n"
+        "Для отмены нажмите /cancel"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_cancel")]
+    ])
+    
+    await callback_query.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
+    await callback_query.answer()
+
+# Обработка рассылки
+@dp.message(AdminStates.waiting_broadcast_message)
+async def admin_broadcast_process(message: types.Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет прав доступа!")
+        await state.clear()
+        return
+    
+    if message.text and message.text.startswith("/cancel"):
+        await message.answer("❌ Рассылка отменена.")
+        await state.clear()
+        return
+    
+    # Начинаем рассылку
+    users = load_data(USERS_FILE)
+    total_users = len(users)
+    successful = 0
+    failed = 0
+    
+    progress_msg = await message.answer(f"📢 Начинаю рассылку...\nВсего пользователей: {total_users}\n\n⏳ Обработано: 0/{total_users}")
+    
+    for i, (user_id_str, user_data) in enumerate(users.items(), 1):
+        try:
+            user_id = int(user_id_str)
+            
+            # Пропускаем забаненных пользователей
+            if user_data.get("is_banned", False):
+                continue
+            
+            # Отправляем сообщение в зависимости от типа
+            if message.photo:
+                await bot.send_photo(
+                    user_id,
+                    message.photo[-1].file_id,
+                    caption=message.caption if message.caption else None,
+                    parse_mode="Markdown" if message.caption and any(mark in message.caption for mark in ['*', '_', '`', '[']) else None
+                )
+            elif message.document:
+                await bot.send_document(
+                    user_id,
+                    message.document.file_id,
+                    caption=message.caption if message.caption else None,
+                    parse_mode="Markdown" if message.caption and any(mark in message.caption for mark in ['*', '_', '`', '[']) else None
+                )
+            else:
+                await bot.send_message(
+                    user_id,
+                    message.text,
+                    parse_mode="Markdown" if any(mark in message.text for mark in ['*', '_', '`', '[']) else None
+                )
+            
+            successful += 1
+            
+            # Обновляем прогресс каждые 10 пользователей
+            if i % 10 == 0 or i == total_users:
+                await progress_msg.edit_text(
+                    f"📢 Рассылка...\nВсего пользователей: {total_users}\n\n"
+                    f"✅ Успешно: {successful}\n"
+                    f"❌ Ошибок: {failed}\n"
+                    f"⏳ Обработано: {i}/{total_users}"
+                )
+            
+            # Задержка чтобы не превысить лимиты Telegram
+            await asyncio.sleep(0.1)
+            
+        except Exception as e:
+            failed += 1
+            print(f"Ошибка при отправке пользователю {user_id_str}: {e}")
+    
+    await state.clear()
+    
+    result_text = (
+        f"✅ **Рассылка завершена!**\n\n"
+        f"📊 **Результаты:**\n"
+        f"• Всего пользователей: {total_users}\n"
+        f"• Успешно доставлено: {successful}\n"
+        f"• Не удалось доставить: {failed}\n"
+        f"• Процент успеха: {successful/max(total_users, 1)*100:.1f}%\n\n"
+        f"⏱️ Рассылка завершена: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}"
+    )
+    
+    await progress_msg.edit_text(result_text, parse_mode="Markdown")
+    await message.answer("✅ Рассылка завершена!")
+
+# Блокировка пользователя - начало
+@dp.callback_query(lambda c: c.data == "admin_ban")
+async def admin_ban_start(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.from_user.id != ADMIN_ID:
+        await callback_query.answer("❌ У вас нет прав доступа!")
+        return
+    
+    await state.set_state(AdminStates.waiting_user_id_for_ban)
+    
+    banned_users = load_data(BANNED_USERS_FILE)
+    text = (
+        f"🚫 **Блокировка пользователя**\n\n"
+        f"Введите ID пользователя для блокировки.\n\n"
+        f"📊 Сейчас заблокировано: {len(banned_users)} пользователей\n\n"
+        f"ℹ️ **Как найти ID пользователя:**\n"
+        f"1. Попросите пользователя отправить /id\n"
+        f"2. Или найдите в списке пользователей\n\n"
+        f"Для отмены нажмите /cancel"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Список пользователей", callback_data="admin_users")],
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_cancel")]
+    ])
+    
+    await callback_query.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
+    await callback_query.answer()
+
+# Обработка блокировки
+@dp.message(AdminStates.waiting_user_id_for_ban)
+async def admin_ban_process(message: types.Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет прав доступа!")
+        await state.clear()
+        return
+    
+    if message.text.startswith("/cancel"):
+        await message.answer("❌ Блокировка отменена.")
+        await state.clear()
+        return
+    
+    try:
+        user_id = int(message.text)
+        user_data = get_user_data(user_id)
+        
+        # Проверяем, не забанен ли уже
+        if is_user_banned(user_id):
+            await message.answer(f"❌ Пользователь {user_id} уже заблокирован!")
+            await state.clear()
+            return
+        
+        # Блокируем пользователя
+        ban_user(user_id, reason="Блокировка администратором", admin_id=message.from_user.id)
+        
+        # Отправляем уведомление пользователю
+        try:
+            await bot.send_message(
+                user_id,
+                "❌ **Вы были заблокированы в боте!**\n\n"
+                "Для разблокировки свяжитесь с администратором.",
+                parse_mode="Markdown"
+            )
+        except:
+            pass
+        
+        await message.answer(
+            f"✅ **Пользователь заблокирован!**\n\n"
+            f"👤 ID: {user_id}\n"
+            f"👋 Имя: {user_data.get('first_name', 'Неизвестно')}\n"
+            f"📛 Username: @{user_data.get('username', 'нет')}\n"
+            f"📅 Заблокирован: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
+            f"👮 Администратор: {message.from_user.full_name}"
+        )
+        
+        await state.clear()
+        
+    except ValueError:
+        await message.answer("❌ Неверный формат ID. Введите числовой ID пользователя.")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при блокировке: {e}")
+        await state.clear()
+
+# Разблокировка пользователя - начало
+@dp.callback_query(lambda c: c.data == "admin_unban")
+async def admin_unban_start(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.from_user.id != ADMIN_ID:
+        await callback_query.answer("❌ У вас нет прав доступа!")
+        return
+    
+    await state.set_state(AdminStates.waiting_user_id_for_unban)
+    
+    banned_users = load_data(BANNED_USERS_FILE)
+    
+    if not banned_users:
+        text = "✅ Нет заблокированных пользователей."
+        await callback_query.message.edit_text(text)
+        await state.clear()
+        return
+    
+    # Формируем список заблокированных
+    banned_list = "🚫 **Заблокированные пользователи:**\n\n"
+    for user_id_str, ban_info in list(banned_users.items())[:20]:  # Показываем первые 20
+        user_id = int(user_id_str)
+        user_data = get_user_data(user_id)
+        banned_date = datetime.fromisoformat(ban_info['banned_at']).strftime('%d.%m.%Y %H:%M')
+        banned_list += f"👤 ID: {user_id}\n"
+        banned_list += f"👋 Имя: {user_data.get('first_name', 'Неизвестно')}\n"
+        banned_list += f"📅 Заблокирован: {banned_date}\n"
+        banned_list += f"📝 Причина: {ban_info.get('reason', 'Не указана')}\n\n"
+    
+    if len(banned_users) > 20:
+        banned_list += f"... и еще {len(banned_users) - 20} пользователей\n\n"
+    
+    banned_list += "Введите ID пользователя для разблокировки.\nДля отмены нажмите /cancel"
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="admin_cancel")]
+    ])
+    
+    await callback_query.message.edit_text(banned_list, parse_mode="Markdown", reply_markup=keyboard)
+    await callback_query.answer()
+
+# Обработка разблокировки
+@dp.message(AdminStates.waiting_user_id_for_unban)
+async def admin_unban_process(message: types.Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("❌ У вас нет прав доступа!")
+        await state.clear()
+        return
+    
+    if message.text.startswith("/cancel"):
+        await message.answer("❌ Разблокировка отменена.")
+        await state.clear()
+        return
+    
+    try:
+        user_id = int(message.text)
+        
+        # Проверяем, забанен ли пользователь
+        if not is_user_banned(user_id):
+            await message.answer(f"❌ Пользователь {user_id} не заблокирован!")
+            await state.clear()
+            return
+        
+        # Разблокируем пользователя
+        if unban_user(user_id):
+            user_data = get_user_data(user_id)
+            
+            # Отправляем уведомление пользователю
+            try:
+                await bot.send_message(
+                    user_id,
+                    "✅ **Ваша блокировка снята!**\n\n"
+                    "Теперь вы снова можете пользоваться ботом.",
+                    parse_mode="Markdown"
+                )
+            except:
+                pass
+            
+            await message.answer(
+                f"✅ **Пользователь разблокирован!**\n\n"
+                f"👤 ID: {user_id}\n"
+                f"👋 Имя: {user_data.get('first_name', 'Неизвестно')}\n"
+                f"📛 Username: @{user_data.get('username', 'нет')}\n"
+                f"📅 Разблокирован: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n"
+                f"👮 Администратор: {message.from_user.full_name}"
+            )
+        else:
+            await message.answer("❌ Ошибка при разблокировке пользователя.")
+        
+        await state.clear()
+        
+    except ValueError:
+        await message.answer("❌ Неверный формат ID. Введите числовой ID пользователя.")
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при разблокировке: {e}")
+        await state.clear()
+
+# Отмена админских действий
+@dp.callback_query(lambda c: c.data == "admin_cancel")
+async def admin_cancel(callback_query: types.CallbackQuery, state: FSMContext):
+    if callback_query.from_user.id != ADMIN_ID:
+        await callback_query.answer("❌ У вас нет прав доступа!")
+        return
+    
+    await state.clear()
+    await callback_query.message.edit_text("❌ Действие отменено.")
+    await callback_query.answer()
+
+# Команда /id для получения своего ID
+@dp.message(Command("id"))
+async def cmd_id(message: types.Message):
+    user_id = message.from_user.id
+    
+    if is_user_banned(user_id):
+        await message.answer("❌ Вы заблокированы в этом боте.")
+        return
+    
+    user_data = get_user_data(user_id)
+    
+    text = (
+        f"👤 **Ваши данные:**\n\n"
+        f"🆔 **Ваш ID:** `{user_id}`\n"
+        f"👋 **Имя:** {message.from_user.full_name}\n"
+        f"📛 **Username:** @{message.from_user.username or 'нет'}\n"
+        f"📅 **Дата регистрации:** {datetime.fromisoformat(user_data['join_date']).strftime('%d.%m.%Y %H:%M')}\n\n"
+        f"🔗 **Ваша реферальная ссылка:**\n"
+        f"`{get_referral_link(user_id)}`\n\n"
+        f"💡 **ID нужен для:**\n"
+        f"• Обращения к администратору\n"
+        f"• Проверки статуса заказа\n"
+        f"• Получения помощи"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📋 Скопировать ID", callback_data=f"copy_id_{user_id}")],
+        [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
+    ])
+    
+    await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+
+# Личный профиль пользователя (обновлен с проверкой бана)
 @dp.callback_query(lambda c: c.data == "my_profile")
 async def my_profile(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if is_user_banned(user_id):
+        await callback_query.message.answer("❌ Вы заблокированы в этом боте. Для разблокировки свяжитесь с администратором.")
+        await callback_query.answer()
+        return
+    
     user_data = get_user_data(user_id)
     
     # Получаем информацию о активном ключе
     active_key_info = ""
     if user_data.get("active_key"):
+        active_key_info = f"🔑 **Ваш ключ:** `{user_data['active_key']}`\n"
+        
         keys = load_data(KEYS_FILE)
         key_info = keys.get(user_data["active_key"], {})
         
@@ -408,27 +835,20 @@ async def my_profile(callback_query: types.CallbackQuery):
                 if expires_date > now:
                     days_left = (expires_date - now).days
                     hours_left = (expires_date - now).seconds // 3600
-                    active_key_info = f"⏳ Осталось: {days_left} дн. {hours_left} ч.\n"
+                    active_key_info += f"⏳ Осталось: {days_left} дн. {hours_left} ч.\n"
                     expires_text = f"📅 Истекает: {expires_date.strftime('%d.%m.%Y %H:%M')}"
                 else:
-                    active_key_info = "❌ Ключ истек\n"
+                    active_key_info += "❌ Ключ истек\n"
                     expires_text = "📅 Истек"
             else:
-                active_key_info = "✅ Ключ активен\n"
+                active_key_info += "✅ Ключ активен\n"
                 expires_text = "📅 Истекает: НИКОГДА"
         else:
-            active_key_info = "❌ Ключ не найден\n"
-            expires_text = ""
+            active_key_info += "✅ Ключ активен (общий ключ)\n"
+            expires_text = "📅 Истекает: НИКОГДА"
     else:
         active_key_info = "❌ Нет активных ключей\n"
         expires_text = ""
-    
-    # Получаем информацию о реферере
-    referrer_info = ""
-    if user_data.get("referrer_id"):
-        referrer_data = get_user_data(user_data["referrer_id"])
-        referrer_name = referrer_data.get("first_name", "Пользователь")
-        referrer_info = f"👤 Вас пригласил: {referrer_name}\n"
     
     # Формируем текст профиля
     profile_text = (
@@ -436,7 +856,6 @@ async def my_profile(callback_query: types.CallbackQuery):
         f"🆔 ID: {user_id}\n"
         f"👋 Имя: {user_data.get('first_name', 'Неизвестно')}\n"
         f"📅 Дата регистрации: {datetime.fromisoformat(user_data['join_date']).strftime('%d.%m.%Y %H:%M')}\n\n"
-        f"{referrer_info}"
         f"💰 **Баланс:** {user_data.get('balance', 0)} RUB\n"
         f"💵 Всего заработано: {user_data.get('total_earned', 0)} RUB\n"
         f"💸 Всего потрачено: {user_data.get('total_spent', 0)} RUB\n"
@@ -447,29 +866,11 @@ async def my_profile(callback_query: types.CallbackQuery):
     )
     
     if user_data.get("active_key"):
-        profile_text += f"🔐 Ключ: `{user_data['active_key']}`\n{expires_text}\n\n"
+        profile_text += f"{expires_text}\n\n"
     
     if user_data.get("referrals"):
         referrals_count = len(user_data["referrals"])
         profile_text += f"👥 Рефералов: {referrals_count} чел.\n"
-        
-        # Подсчитываем доход от рефералов
-        referrals_income = 0
-        if os.path.exists("referral_transactions.json"):
-            transactions = load_data("referral_transactions.json")
-            for transaction in transactions.values():
-                if transaction.get("referrer_id") == user_id:
-                    referrals_income += transaction.get("bonus", 0)
-        
-        if referrals_income > 0:
-            profile_text += f"💰 Заработано с рефералов: {referrals_income} RUB\n"
-    else:
-        profile_text += "👥 Рефералов: 0 чел.\n"
-    
-    # Добавляем информацию о карте если есть
-    if user_data.get("card_number"):
-        masked_card = user_data["card_number"][-4:].rjust(len(user_data["card_number"]), "*")
-        profile_text += f"\n💳 **Привязанная карта:** `{masked_card}`\n"
     
     # Кнопки профиля
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -478,117 +879,38 @@ async def my_profile(callback_query: types.CallbackQuery):
         [InlineKeyboardButton(text="💰 Вывести средства", callback_data="withdraw_funds")],
         [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
         [InlineKeyboardButton(text="🛒 Купить подписку", callback_data="choose_subscription")],
+        [InlineKeyboardButton(text="🆔 Мой ID", callback_data=f"copy_id_{user_id}")],
         [InlineKeyboardButton(text="🔙 Назад в меню", callback_data="main_menu")]
     ])
     
     await callback_query.message.edit_text(profile_text, parse_mode="Markdown", reply_markup=keyboard)
     await callback_query.answer()
 
-# Реферальная система
-@dp.callback_query(lambda c: c.data == "referral_system")
-async def referral_system(callback_query: types.CallbackQuery):
+# Копирование ID
+@dp.callback_query(lambda c: c.data.startswith("copy_id_"))
+async def copy_id_handler(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
-    user_data = get_user_data(user_id)
+    await callback_query.answer(f"Ваш ID: {user_id} скопирован!")
     
-    referral_link = get_referral_link(user_id)
-    referrals_count = len(user_data.get("referrals", []))
-    total_earned = user_data.get("total_earned", 0)
-    balance = user_data.get("balance", 0)
-    total_withdrawn = user_data.get("total_withdrawn", 0)
-    
-    # Подсчитываем доход от рефералов за последние 30 дней
-    last_month_income = 0
-    if os.path.exists("referral_transactions.json"):
-        transactions = load_data("referral_transactions.json")
-        month_ago = datetime.now() - timedelta(days=30)
-        
-        for transaction in transactions.values():
-            if transaction.get("referrer_id") == user_id:
-                transaction_date = datetime.fromisoformat(transaction.get("timestamp", datetime.now().isoformat()))
-                if transaction_date > month_ago:
-                    last_month_income += transaction.get("bonus", 0)
-    
-    # Создаем текст для кнопки "Поделиться"
-    share_text = f"🎮 Привет! Заходи в бота магазина NeworkPC по моей ссылке!\n\n🔥 Получи крутые подписки на NeworkPC!\n\n🔗 {referral_link}"
-    
-    referral_text = (
-        f"🎁 **Реферальная система**\n\n"
-        f"💰 **Вы получаете {REFERRAL_PERCENT}% с каждой покупки ваших рефералов!**\n\n"
-        f"📊 **Ваша статистика:**\n"
-        f"👥 Приглашено пользователей: {referrals_count}\n"
-        f"💵 Всего заработано: {total_earned} RUB\n"
-        f"📈 За последний месяц: {last_month_income} RUB\n"
-        f"💳 Текущий баланс: {balance} RUB\n"
-        f"💸 Всего выведено: {total_withdrawn} RUB\n"
-        f"🎯 Минимальный вывод: {MIN_WITHDRAWAL} RUB\n\n"
-        f"🔗 **Ваша реферальная ссылка:**\n"
-        f"`{referral_link}`\n\n"
-        f"📋 **Как это работает:**\n"
-        f"1. Поделитесь своей ссылкой с друзьями\n"
-        f"2. Они должны перейти по ссылке и зарегистрироваться\n"
-        f"3. Когда они купят подписку\n"
-        f"4. Вы получите {REFERRAL_PERCENT}% от их покупки!\n\n"
-        f"💡 **Совет:** Чем больше пригласите, тем больше заработаете!"
+    # Отправляем сообщение с ID для копирования
+    await callback_query.message.answer(
+        f"🆔 **Ваш ID для копирования:**\n"
+        f"```\n{user_id}\n```\n\n"
+        f"📋 Выделите и скопируйте ID выше",
+        parse_mode="Markdown"
     )
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📤 Поделиться ссылкой", 
-                             url=f"https://t.me/share/url?url={referral_link}&text={share_text}")],
-        [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
-        [InlineKeyboardButton(text="💰 Вывести средства", callback_data="withdraw_funds")],
-        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
-        [InlineKeyboardButton(text="📊 Мои рефералы", callback_data="my_referrals")],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
-    ])
-    
-    await callback_query.message.edit_text(referral_text, parse_mode="Markdown", reply_markup=keyboard)
-    await callback_query.answer()
 
-# Просмотр моих рефералов
-@dp.callback_query(lambda c: c.data == "my_referrals")
-async def my_referrals(callback_query: types.CallbackQuery):
-    user_id = callback_query.from_user.id
-    user_data = get_user_data(user_id)
-    
-    referrals = user_data.get("referrals", [])
-    
-    if not referrals:
-        text = (
-            f"📊 **Мои рефералы**\n\n"
-            f"👥 У вас пока нет рефералов.\n\n"
-            f"💡 Пригласите друзей по своей реферальной ссылке и начните зарабатывать {REFERRAL_PERCENT}% с их покупок!"
-        )
-    else:
-        text = f"📊 **Мои рефералы**\n\n"
-        text += f"👥 Всего рефералов: {len(referrals)}\n\n"
-        
-        # Показываем первых 10 рефералов
-        for i, ref_id in enumerate(referrals[:10], 1):
-            ref_data = get_user_data(ref_id)
-            ref_name = ref_data.get("first_name", "Пользователь")
-            ref_orders = ref_data.get("orders_count", 0)
-            ref_spent = ref_data.get("total_spent", 0)
-            
-            text += f"{i}. {ref_name}\n"
-            text += f"   📦 Заказов: {ref_orders}\n"
-            text += f"   💰 Потратил: {ref_spent} RUB\n\n"
-        
-        if len(referrals) > 10:
-            text += f"📝 ... и еще {len(referrals) - 10} рефералов\n\n"
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎁 Реферальная система", callback_data="referral_system")],
-        [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
-        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
-        [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
-    ])
-    
-    await callback_query.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
-    await callback_query.answer()
-
-# Главное меню
+# Главное меню (с проверкой бана)
 @dp.callback_query(lambda c: c.data == "main_menu")
 async def main_menu(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if is_user_banned(user_id):
+        await callback_query.message.answer("❌ Вы заблокированы в этом боте. Для разблокировки свяжитесь с администратором.")
+        await callback_query.answer()
+        return
+    
     welcome_text = (
         f"👋 Добро пожаловать, {callback_query.from_user.first_name}!\n\n"
         f"👇 Выберите действие:"
@@ -604,9 +926,17 @@ async def main_menu(callback_query: types.CallbackQuery):
     await callback_query.message.edit_text(welcome_text, reply_markup=keyboard)
     await callback_query.answer()
 
-# Начало выбора подписки
+# Начало выбора подписки (с проверкой бана)
 @dp.callback_query(lambda c: c.data == "choose_subscription")
 async def start_subscription_choice(callback_query: types.CallbackQuery, state: FSMContext):
+    user_id = callback_query.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if is_user_banned(user_id):
+        await callback_query.message.answer("❌ Вы заблокированы в этом боте. Для разблокировки свяжитесь с администратором.")
+        await callback_query.answer()
+        return
+    
     await state.clear()
     device_text = "📱 **На какое устройство нужен DLC?**"
     
@@ -621,7 +951,7 @@ async def start_subscription_choice(callback_query: types.CallbackQuery, state: 
     await callback_query.message.edit_text(device_text, parse_mode="Markdown", reply_markup=device_keyboard)
     await callback_query.answer()
 
-# Выбор устройства (APK)
+# Выбор устройства (APK) - ИСПРАВЛЕНО: все периоды сразу
 @dp.callback_query(lambda c: c.data == "select_device_apk")
 async def process_device_apk(callback_query: types.CallbackQuery, state: FSMContext):
     await state.update_data(
@@ -630,20 +960,22 @@ async def process_device_apk(callback_query: types.CallbackQuery, state: FSMCont
     )
     await state.set_state(PurchaseStates.waiting_for_period)
     
+    # Создаем клавиатуру с ВСЕМИ периодами сразу
     period_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"{period_info['name']} - {period_info['price']} RUB", 
-            callback_data=f"select_period_{period_id}"
-        )]
-        for period_id, period_info in SUBSCRIPTION_PERIODS.items()
-    ])
-    
-    period_keyboard.inline_keyboard.append([
-        InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
-        InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
-    ])
-    period_keyboard.inline_keyboard.append([
-        InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+        [
+            InlineKeyboardButton(text="7 дней - 300 RUB", callback_data="select_period_7_days"),
+            InlineKeyboardButton(text="30 дней - 450 RUB", callback_data="select_period_30_days")
+        ],
+        [
+            InlineKeyboardButton(text="Вечно - 650 RUB", callback_data="select_period_forever")
+        ],
+        [
+            InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
+            InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+        ]
     ])
     
     await callback_query.message.edit_text(
@@ -653,7 +985,7 @@ async def process_device_apk(callback_query: types.CallbackQuery, state: FSMCont
     )
     await callback_query.answer()
 
-# Выбор устройства (Emulator)
+# Выбор устройства (Emulator) - ИСПРАВЛЕНО: все периоды сразу
 @dp.callback_query(lambda c: c.data == "select_device_emulator")
 async def process_device_emulator(callback_query: types.CallbackQuery, state: FSMContext):
     await state.update_data(
@@ -662,20 +994,22 @@ async def process_device_emulator(callback_query: types.CallbackQuery, state: FS
     )
     await state.set_state(PurchaseStates.waiting_for_period)
     
+    # Создаем клавиатуру с ВСЕМИ периодами сразу
     period_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"{period_info['name']} - {period_info['price']} RUB", 
-            callback_data=f"select_period_{period_id}"
-        )]
-        for period_id, period_info in SUBSCRIPTION_PERIODS.items()
-    ])
-    
-    period_keyboard.inline_keyboard.append([
-        InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
-        InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
-    ])
-    period_keyboard.inline_keyboard.append([
-        InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+        [
+            InlineKeyboardButton(text="7 дней - 300 RUB", callback_data="select_period_7_days"),
+            InlineKeyboardButton(text="30 дней - 450 RUB", callback_data="select_period_30_days")
+        ],
+        [
+            InlineKeyboardButton(text="Вечно - 650 RUB", callback_data="select_period_forever")
+        ],
+        [
+            InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
+            InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+        ]
     ])
     
     await callback_query.message.edit_text(
@@ -685,7 +1019,7 @@ async def process_device_emulator(callback_query: types.CallbackQuery, state: FS
     )
     await callback_query.answer()
 
-# Выбор устройства (iOS)
+# Выбор устройства (iOS) - ИСПРАВЛЕНО: все периоды сразу
 @dp.callback_query(lambda c: c.data == "select_device_ios")
 async def process_device_ios(callback_query: types.CallbackQuery, state: FSMContext):
     await state.update_data(
@@ -694,20 +1028,22 @@ async def process_device_ios(callback_query: types.CallbackQuery, state: FSMCont
     )
     await state.set_state(PurchaseStates.waiting_for_period)
     
+    # Создаем клавиатуру с ВСЕМИ периодами сразу
     period_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"{period_info['name']} - {period_info['price']} RUB", 
-            callback_data=f"select_period_{period_id}"
-        )]
-        for period_id, period_info in SUBSCRIPTION_PERIODS.items()
-    ])
-    
-    period_keyboard.inline_keyboard.append([
-        InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
-        InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
-    ])
-    period_keyboard.inline_keyboard.append([
-        InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+        [
+            InlineKeyboardButton(text="7 дней - 300 RUB", callback_data="select_period_7_days"),
+            InlineKeyboardButton(text="30 дней - 450 RUB", callback_data="select_period_30_days")
+        ],
+        [
+            InlineKeyboardButton(text="Вечно - 650 RUB", callback_data="select_period_forever")
+        ],
+        [
+            InlineKeyboardButton(text="🔍 Посмотреть обзор", url=FUNCTIONALITY_REVIEW_LINK),
+            InlineKeyboardButton(text="📝 Отзывы", url=REVIEWS_LINK)
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")
+        ]
     ])
     
     await callback_query.message.edit_text(
@@ -717,7 +1053,7 @@ async def process_device_ios(callback_query: types.CallbackQuery, state: FSMCont
     )
     await callback_query.answer()
 
-# Выбор срока подписки
+# Выбор срока подписки (остается без изменений)
 @dp.callback_query(lambda c: c.data.startswith("select_period_"))
 async def process_period_choice(callback_query: types.CallbackQuery, state: FSMContext):
     period_id = callback_query.data.replace("select_period_", "")
@@ -749,8 +1085,10 @@ async def process_period_choice(callback_query: types.CallbackQuery, state: FSMC
     )
     
     payment_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 Тинькофф", callback_data="select_payment_tinkoff")],
-        [InlineKeyboardButton(text="🏦 СБП Сбербанк", callback_data="select_payment_sber_sbp")],
+        [
+            InlineKeyboardButton(text="💳 Тинькофф", callback_data="select_payment_tinkoff"),
+            InlineKeyboardButton(text="🏦 СБП Сбербанк", callback_data="select_payment_sber_sbp")
+        ],
         [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="choose_subscription")]
     ])
@@ -758,7 +1096,7 @@ async def process_period_choice(callback_query: types.CallbackQuery, state: FSMC
     await callback_query.message.edit_text(summary_text, parse_mode="Markdown", reply_markup=payment_keyboard)
     await callback_query.answer()
 
-# Выбор метода оплаты
+# Выбор метода оплаты (остается без изменений)
 @dp.callback_query(lambda c: c.data in ["select_payment_tinkoff", "select_payment_sber_sbp"])
 async def process_payment_method(callback_query: types.CallbackQuery, state: FSMContext):
     payment_method = callback_query.data.replace("select_payment_", "")
@@ -828,6 +1166,14 @@ async def process_payment_method(callback_query: types.CallbackQuery, state: FSM
 # Обработка чека
 @dp.message(PurchaseStates.waiting_for_receipt)
 async def process_receipt(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if is_user_banned(user_id):
+        await message.answer("❌ Вы заблокированы в этом боте. Для разблокировки свяжитесь с администратором.")
+        await state.clear()
+        return
+    
     if not (message.photo or message.document):
         await message.answer("❌ Пожалуйста, отправьте фото или скриншот чека об оплате!")
         return
@@ -969,7 +1315,7 @@ async def process_order_for_user(message: types.Message, state: FSMContext):
         print(f"Ошибка при обработке заказа: {e}")
         await message.answer("❌ Произошла ошибка при обработке заказа. Попробуйте еще раз.")
 
-# Обработчик действий администратора
+# Обновленная функция process_admin_action для выдачи общего ключа
 @dp.callback_query(lambda c: c.data.startswith("approve_") or c.data.startswith("reject_"))
 async def process_admin_action(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
@@ -1000,7 +1346,8 @@ async def process_admin_action(callback_query: types.CallbackQuery):
     period_price = order_info.get("period_price", 0)
     
     if action == "approve":
-        # Генерируем ключ
+        # Используем общий ключ
+        key = COMMON_KEY
         period_days = order_info.get("period_days", 7)
         device_type = order_info.get("device_type", "apk")
         
@@ -1009,7 +1356,21 @@ async def process_admin_action(callback_query: types.CallbackQuery):
         else:
             period_days_for_key = period_days
         
-        key = generate_key(order_id, period_days_for_key, device_type)
+        # Сохраняем информацию о выдаче ключа
+        keys = load_data(KEYS_FILE)
+        if key not in keys:
+            keys[key] = {
+                "order_id": order_id,
+                "created_at": datetime.now().isoformat(),
+                "expires_at": None if period_days == "навсегда" else (
+                    datetime.now() + timedelta(days=period_days_for_key)
+                ).isoformat(),
+                "is_used": False,
+                "period_days": period_days_for_key,
+                "device_type": device_type,
+                "is_common": True
+            }
+        save_data(KEYS_FILE, keys)
         
         # Обновляем заказ
         orders[order_id]["status"] = "approved"
@@ -1049,7 +1410,7 @@ async def process_admin_action(callback_query: types.CallbackQuery):
             f"🎮 **Спасибо за доверие! Приятной игры!**"
         )
         
-        # Кнопки для пользователя
+        # Кнопки для пользователя (обновленная ссылка на DLC)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="⬇️ СКАЧАТЬ DLC", url=DLC_DOWNLOAD_LINK)],
             [InlineKeyboardButton(text="📋 Скопировать ключ", callback_data=f"copy_key_{key}")],
@@ -1059,7 +1420,6 @@ async def process_admin_action(callback_query: types.CallbackQuery):
         
         try:
             await bot.send_message(order_user_id, user_message, parse_mode="Markdown", reply_markup=keyboard)
-            
         except Exception as e:
             print(f"Ошибка при отправке сообщения пользователю: {e}")
         
@@ -1080,11 +1440,6 @@ async def process_admin_action(callback_query: types.CallbackQuery):
             )
         except Exception as e:
             print(f"Ошибка при редактировании сообщения: {e}")
-            await callback_query.message.answer(
-                f"✅ Заказ {order_id} принят!\n"
-                f"Ключ: {key}",
-                parse_mode="Markdown"
-            )
         
         await callback_query.answer(f"Заказ {order_id} принят! Ключ отправлен.")
         
@@ -1144,6 +1499,13 @@ async def copy_key_handler(callback_query: types.CallbackQuery):
 @dp.callback_query(lambda c: c.data == "withdraw_funds")
 async def withdraw_funds(callback_query: types.CallbackQuery):
     user_id = callback_query.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if is_user_banned(user_id):
+        await callback_query.message.answer("❌ Вы заблокированы в этом боте. Для разблокировки свяжитесь с администратором.")
+        await callback_query.answer()
+        return
+    
     user_data = get_user_data(user_id)
     balance = user_data.get("balance", 0)
     
@@ -1182,6 +1544,73 @@ async def withdraw_funds(callback_query: types.CallbackQuery):
     await callback_query.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
     await callback_query.answer()
 
+# Реферальная система (с проверкой бана)
+@dp.callback_query(lambda c: c.data == "referral_system")
+async def referral_system(callback_query: types.CallbackQuery):
+    user_id = callback_query.from_user.id
+    
+    # Проверяем, не забанен ли пользователь
+    if is_user_banned(user_id):
+        await callback_query.message.answer("❌ Вы заблокированы в этом боте. Для разблокировки свяжитесь с администратором.")
+        await callback_query.answer()
+        return
+    
+    user_data = get_user_data(user_id)
+    
+    referral_link = get_referral_link(user_id)
+    referrals_count = len(user_data.get("referrals", []))
+    total_earned = user_data.get("total_earned", 0)
+    balance = user_data.get("balance", 0)
+    total_withdrawn = user_data.get("total_withdrawn", 0)
+    
+    # Подсчитываем доход от рефералов за последние 30 дней
+    last_month_income = 0
+    if os.path.exists("referral_transactions.json"):
+        transactions = load_data("referral_transactions.json")
+        month_ago = datetime.now() - timedelta(days=30)
+        
+        for transaction in transactions.values():
+            if transaction.get("referrer_id") == user_id:
+                transaction_date = datetime.fromisoformat(transaction.get("timestamp", datetime.now().isoformat()))
+                if transaction_date > month_ago:
+                    last_month_income += transaction.get("bonus", 0)
+    
+    # Создаем текст для кнопки "Поделиться"
+    share_text = f"🎮 Привет! Заходи в бота магазина NeworkPC по моей ссылке!\n\n🔥 Получи крутые подписки на NeworkPC!\n\n🔗 {referral_link}"
+    
+    referral_text = (
+        f"🎁 **Реферальная система**\n\n"
+        f"💰 **Вы получаете {REFERRAL_PERCENT}% с каждой покупки ваших рефералов!**\n\n"
+        f"📊 **Ваша статистика:**\n"
+        f"👥 Приглашено пользователей: {referrals_count}\n"
+        f"💵 Всего заработано: {total_earned} RUB\n"
+        f"📈 За последний месяц: {last_month_income} RUB\n"
+        f"💳 Текущий баланс: {balance} RUB\n"
+        f"💸 Всего выведено: {total_withdrawn} RUB\n"
+        f"🎯 Минимальный вывод: {MIN_WITHDRAWAL} RUB\n\n"
+        f"🔗 **Ваша реферальная ссылка:**\n"
+        f"`{referral_link}`\n\n"
+        f"📋 **Как это работает:**\n"
+        f"1. Поделитесь своей ссылкой с друзьями\n"
+        f"2. Они должны перейти по ссылке и зарегистрироваться\n"
+        f"3. Когда они купят подписку\n"
+        f"4. Вы получите {REFERRAL_PERCENT}% от их покупки!\n\n"
+        f"💡 **Совет:** Чем больше пригласите, тем больше заработаете!"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📤 Поделиться ссылкой", 
+                             url=f"https://t.me/share/url?url={referral_link}&text={share_text}")],
+        [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
+        [InlineKeyboardButton(text="💰 Вывести средства", callback_data="withdraw_funds")],
+        [InlineKeyboardButton(text="📝 Посмотреть отзывы", url=REVIEWS_LINK)],
+        [InlineKeyboardButton(text="📊 Мои рефералы", callback_data="my_referrals")],
+        [InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu")]
+    ])
+    
+    await callback_query.message.edit_text(referral_text, parse_mode="Markdown", reply_markup=keyboard)
+    await callback_query.answer()
+
 # Основная функция
 async def main():
     # Инициализируем файлы
@@ -1194,6 +1623,8 @@ async def main():
     print(f"🔗 Приватная группа: {PRIVATE_GROUP_LINK}")
     print(f"📝 Отзывы: {REVIEWS_LINK}")
     print(f"🔍 Обзор функционала: {FUNCTIONALITY_REVIEW_LINK}")
+    print(f"🔗 Скачать DLC: {DLC_DOWNLOAD_LINK}")
+    print(f"🔑 Общий ключ: {COMMON_KEY}")
     print(f"💰 Реферальная комиссия: {REFERRAL_PERCENT}%")
     print(f"💸 Минимальный вывод: {MIN_WITHDRAWAL} RUB")
     print(f"🤝 Реферальные ссылки: https://t.me/{BOT_USERNAME}?start=ref_КОД")
@@ -1204,6 +1635,8 @@ async def main():
     print("   • История заказов")
     print("   • Автоматическое начисление бонусов")
     print("   • Отзывы пользователей")
+    print("   • Система блокировки пользователей")
+    print("   • Рассылка сообщений от администратора")
     print("=" * 60)
     print("📱 Поддерживаемые устройства:")
     print("   • Android (APK)")
